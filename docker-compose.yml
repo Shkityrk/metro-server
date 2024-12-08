@@ -1,0 +1,96 @@
+version: '3.9'
+
+services:
+  metro_alarm_server_auth:
+    env_file:
+      - ./MetroAlarmServerAuth/.env/.env
+    build:
+      dockerfile: ./docker/Dockerfile
+      context: ./MetroAlarmServerAuth
+    command: [ "/app/scripts/app.sh" ]
+    volumes:
+      - ./MetroAlarmServerAuth/alembic/versions:/app/alembic/versions
+      - ./MetroAlarmServerAuth/logs:/app/logs
+    depends_on:
+      postgres_auth:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8081/auth/healthcheck || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - msa
+
+  postgres_auth:
+    image: postgres:16.1-alpine3.19
+    restart: always
+    env_file:
+      - ./MetroAlarmServerAuth/.env/.database.env
+    volumes:
+      - ./metro_alarm_server_auth_db:/var/lib/postgresql/data
+      - ./MetroAlarmServerAuth/postgres/postgresql.conf:/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - msa
+
+  metro_alarm_server_map:
+    env_file:
+      - ./MetroAlarmServerMap/.env/.env
+    build:
+      dockerfile: ./docker/Dockerfile
+      context: ./MetroAlarmServerMap
+    command: [ "/app/scripts/app.sh" ]
+    volumes:
+      - ./MetroAlarmServerMap/alembic/versions:/app/alembic/versions
+      - ./MetroAlarmServerMap/maps:/app/maps
+      - ./MetroAlarmServerMap//logs:/app/logs
+    depends_on:
+      postgres_map:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8080/map/healthcheck || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - msa
+
+
+  postgres_map:
+    image: postgres:16.1-alpine3.19
+    restart: always
+    env_file:
+      - ./MetroAlarmServerMap/.env/.database.env
+    volumes:
+      - ./metro_alarm_server_map_db:/var/lib/postgresql/data
+      - ./MetroAlarmServerMap/postgres/postgresql.conf:/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - msa
+
+  proxy:
+    build:
+      dockerfile: ./Dockerfile
+      context: ./metro_alarm_server_nginx
+    depends_on:
+      metro_alarm_server_auth:
+        condition: service_healthy
+      metro_alarm_server_map:
+        condition: service_healthy
+
+    ports:
+      - "443:443"
+    networks:
+      - msa
+networks:
+  msa:
+    driver: bridge

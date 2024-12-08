@@ -1,0 +1,16 @@
+.idea
+*logs
+/postgres/data
+/maps
+*.env
+*.crt
+*.key
+*.log
+
+/.idea
+*.pem
+*__pycache__
+/certs
+
+./metro_alarm_server_auth_db
+./metro_alarm_server_map_db
